@@ -1,5 +1,20 @@
 use proc_macro::TokenStream;
+use proc_macro2::Span;
+use proc_macro_crate::FoundCrate;
 use syn::{Attribute, Data, DeriveInput, Meta};
+
+fn find_serde_crate() -> proc_macro2::TokenStream {
+    match proc_macro_crate::crate_name("serde") {
+        Ok(FoundCrate::Itself) => quote::quote!(crate),
+        Ok(FoundCrate::Name(name)) => {
+            let ident = syn::Ident::new(name.as_str(), Span::call_site());
+            quote::quote!(::#ident)
+        }
+        Err(e) => {
+            panic!("serde is a co-dependency of serde-split")
+        }
+    }
+}
 
 fn filter_attrs(attrs: &mut Vec<Attribute>, is_json: bool) {
     let (remove, replace) = if is_json {
@@ -71,19 +86,21 @@ pub fn derive_serialize(tokens: TokenStream) -> TokenStream {
 
     let ident_str = syn::LitStr::new(ident.to_string().as_str(), ident.span());
 
+    let serde = find_serde_crate();
+
     quote::quote! {
         const _: () = {
-            #[derive(::serde::Serialize)]
+            #[derive(#serde::Serialize)]
             #[serde(remote = #ident_str)]
             #json
 
-            #[derive(::serde::Serialize)]
+            #[derive(#serde::Serialize)]
             #[serde(remote = #ident_str)]
             #bin
 
-            impl ::serde::Serialize for #ident {
+            impl #serde::Serialize for #ident {
                 fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-                    where S: ::serde::Serializer
+                    where S: #serde::Serializer
                 {
                     if serializer.is_human_readable() {
                         #json_ident::serialize(self, serializer)
@@ -117,19 +134,21 @@ pub fn derive_deserialize(tokens: TokenStream) -> TokenStream {
 
     let ident_str = syn::LitStr::new(ident.to_string().as_str(), ident.span());
 
+    let serde = find_serde_crate();
+
     quote::quote! {
         const _: () = {
-            #[derive(::serde::Deserialize)]
+            #[derive(#serde::Deserialize)]
             #[serde(remote = #ident_str)]
             #json
 
-            #[derive(::serde::Deserialize)]
+            #[derive(#serde::Deserialize)]
             #[serde(remote = #ident_str)]
             #bin
 
-            impl<'de> ::serde::Deserialize<'de> for #ident {
+            impl<'de> #serde::Deserialize<'de> for #ident {
                 fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-                    where D: ::serde::Deserializer<'de>
+                    where D: #serde::Deserializer<'de>
                 {
                     if deserializer.is_human_readable() {
                         #json_ident::deserialize(deserializer)
