@@ -10,7 +10,7 @@ fn find_serde_crate() -> proc_macro2::TokenStream {
             let ident = syn::Ident::new(name.as_str(), Span::call_site());
             quote::quote!(::#ident)
         }
-        Err(e) => {
+        Err(_) => {
             panic!("serde is a co-dependency of serde-split")
         }
     }

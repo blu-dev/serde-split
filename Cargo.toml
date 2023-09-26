@@ -2,6 +2,11 @@
 name = "serde-split"
 version = "0.1.0"
 edition = "2021"
+authors = ["blu-dev <the.blu.dev@gmail.com>"]
+license = "MIT OR Apache-2.0"
+description = "Derive two implementations of serde traits for different purposes"
+repository = "https://github.com/blu-dev/serde-split"
+keywords = ["serde", "serialization", "deserializaion", "bincode", "json"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
