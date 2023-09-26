@@ -17,23 +17,19 @@ fn find_serde_crate() -> proc_macro2::TokenStream {
 }
 
 fn filter_attrs(attrs: &mut Vec<Attribute>, is_json: bool) {
-    let (remove, replace) = if is_json {
-        ("bin", "json")
-    } else {
-        ("json", "bin")
-    };
+    let replace = if is_json { "json" } else { "bin" };
 
     let mut current = 0;
     while current < attrs.len() {
-        if attrs[current].path().is_ident(remove) {
-            attrs.remove(current);
-            continue;
-        } else if attrs[current].path().is_ident(replace) {
+        if attrs[current].path().is_ident(replace) {
             match &mut attrs[current].meta {
                 Meta::Path(path) => *path = syn::parse_quote!(serde),
                 Meta::List(list) => list.path = syn::parse_quote!(serde),
                 Meta::NameValue(name_value) => name_value.path = syn::parse_quote!(serde),
             }
+        } else if !attrs[current].path().is_ident("serde") {
+            attrs.remove(current);
+            continue;
         }
 
         current += 1;
