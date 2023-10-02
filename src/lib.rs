@@ -148,7 +148,7 @@ pub fn derive_deserialize(tokens: TokenStream) -> TokenStream {
     let mut bin = input;
 
     filter_data(&mut json, true);
-    filter_data(&mut bin, true);
+    filter_data(&mut bin, false);
 
     json.ident = quote::format_ident!("{}JsonImpl", ident);
     bin.ident = quote::format_ident!("{}BinaryImpl", ident);
