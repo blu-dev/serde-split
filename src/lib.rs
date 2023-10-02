@@ -1,7 +1,7 @@
 use proc_macro::TokenStream;
 use proc_macro2::Span;
 use proc_macro_crate::FoundCrate;
-use syn::{Attribute, Data, DeriveInput, Meta};
+use syn::{Attribute, Data, DeriveInput, Lifetime, LifetimeParam, Meta, WherePredicate};
 
 fn find_serde_crate() -> proc_macro2::TokenStream {
     match proc_macro_crate::crate_name("serde") {
@@ -84,6 +84,34 @@ pub fn derive_serialize(tokens: TokenStream) -> TokenStream {
 
     let serde = find_serde_crate();
 
+    let (impl_gen, ty_gen, where_clause) = bin.generics.split_for_impl();
+
+    let where_clause = if let Some(clause) = where_clause {
+        let mut clause = clause.clone();
+        clause
+            .predicates
+            .extend(bin.generics.params.iter().filter_map(|param| match param {
+                syn::GenericParam::Type(ty) => {
+                    let ident = &ty.ident;
+                    Some::<WherePredicate>(syn::parse_quote!(#ident: #serde::Serialize))
+                }
+                _ => None,
+            }));
+        Some(clause)
+    } else if !bin.generics.params.is_empty() {
+        let clauses = bin.generics.params.iter().filter_map(|param| match param {
+            syn::GenericParam::Type(ty) => {
+                let ident = &ty.ident;
+                Some::<WherePredicate>(syn::parse_quote!(#ident: #serde::Serialize))
+            }
+            _ => None,
+        });
+
+        Some(syn::parse_quote!(where #(#clauses,)*))
+    } else {
+        None
+    };
+
     quote::quote! {
         const _: () = {
             #[derive(#serde::Serialize)]
@@ -94,7 +122,7 @@ pub fn derive_serialize(tokens: TokenStream) -> TokenStream {
             #[serde(remote = #ident_str)]
             #bin
 
-            impl #serde::Serialize for #ident {
+            impl #impl_gen #serde::Serialize for #ident #ty_gen #where_clause {
                 fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
                     where S: #serde::Serializer
                 {
@@ -132,6 +160,43 @@ pub fn derive_deserialize(tokens: TokenStream) -> TokenStream {
 
     let serde = find_serde_crate();
 
+    let mut impl_generics = bin.generics.clone();
+
+    impl_generics.params.insert(
+        0,
+        syn::GenericParam::Lifetime(LifetimeParam::new(Lifetime::new("'de", Span::call_site()))),
+    );
+
+    let (_, ty_gen, where_clause) = bin.generics.split_for_impl();
+
+    let (impl_gen, _, _) = impl_generics.split_for_impl();
+
+    let where_clause = if let Some(clause) = where_clause {
+        let mut clause = clause.clone();
+        clause
+            .predicates
+            .extend(bin.generics.params.iter().filter_map(|param| match param {
+                syn::GenericParam::Type(ty) => {
+                    let ident = &ty.ident;
+                    Some::<WherePredicate>(syn::parse_quote!(#ident: #serde::Deserialize<'de>))
+                }
+                _ => None,
+            }));
+        Some(clause)
+    } else if !bin.generics.params.is_empty() {
+        let clauses = bin.generics.params.iter().filter_map(|param| match param {
+            syn::GenericParam::Type(ty) => {
+                let ident = &ty.ident;
+                Some::<WherePredicate>(syn::parse_quote!(#ident: #serde::Deserialize<'de>))
+            }
+            _ => None,
+        });
+
+        Some(syn::parse_quote!(where #(#clauses,)*))
+    } else {
+        None
+    };
+
     quote::quote! {
         const _: () = {
             #[derive(#serde::Deserialize)]
@@ -142,7 +207,7 @@ pub fn derive_deserialize(tokens: TokenStream) -> TokenStream {
             #[serde(remote = #ident_str)]
             #bin
 
-            impl<'de> #serde::Deserialize<'de> for #ident {
+            impl #impl_gen #serde::Deserialize<'de> for #ident #ty_gen #where_clause {
                 fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
                     where D: #serde::Deserializer<'de>
                 {
